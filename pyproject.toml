@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lakehouse-quality-runner"
+version = "0.1.0"
+description = "ETL quality runner with custom pytest plugin for lakehouse pipelines"
+requires-python = ">=3.9"
+dependencies = [
+    "pytest>=8.0.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6.0"
+]
+
+[project.entry-points.pytest11]
+etl_guard = "pytest_etl_guard.plugin"
