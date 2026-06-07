@@ -1,0 +1,5 @@
+order_id,user_id,amount,status,created_at
+1,101,1500.50,paid,2026-06-01
+2,102,700.00,paid,2026-06-01
+3,103,0.00,cancelled,2026-06-02
+4,104,250.25,new,2026-06-02
