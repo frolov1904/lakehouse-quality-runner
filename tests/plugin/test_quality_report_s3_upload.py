@@ -10,9 +10,9 @@ def test_plugin_uploads_quality_report_to_s3(pytester):
     Проверяем pytest-плагин как пользовательский инструмент.
 
     Сценарий:
-    1. pytester создает временный тестовый файл;
-    2. внутри временного теста используется fixture s3_client из нашего плагина;
-    3. pytester запускает pytest с CLI-опциями нашего плагина;
+    1. pytester создает временный конфиг;
+    2. pytester создает временный тестовый файл;
+    3. pytester запускает pytest с нашим плагином;
     4. плагин генерирует quality report;
     5. плагин загружает report.json в MinIO/S3;
     6. внешний тест проверяет, что report.json реально появился в S3.
@@ -20,6 +20,27 @@ def test_plugin_uploads_quality_report_to_s3(pytester):
     run_id = "pytester_run"
     bucket = "data-lake"
     report_key = f"quality-reports/{run_id}/report.json"
+
+    pytester.makefile(
+        ".json",
+        etl_guard_local="""
+        {
+          "etl_env": "local",
+          "dataset": "orders",
+          "s3": {
+            "endpoint": "http://localhost:9000",
+            "access_key": "minioadmin",
+            "secret_key": "minioadmin",
+            "bucket": "data-lake"
+          },
+          "quality_report": {
+            "local_dir": "quality-reports",
+            "upload_to_s3": true,
+            "s3_prefix": "quality-reports"
+          }
+        }
+        """,
+    )
 
     pytester.makepyfile(
         test_temp_etl_check="""
@@ -48,16 +69,8 @@ def test_plugin_uploads_quality_report_to_s3(pytester):
 
     result = pytester.runpytest(
         "test_temp_etl_check.py",
-        "--etl-env=local",
-        "--dataset=orders",
+        "--etl-config=etl_guard_local.json",
         f"--run-id={run_id}",
-        "--s3-endpoint=http://localhost:9000",
-        "--s3-access-key=minioadmin",
-        "--s3-secret-key=minioadmin",
-        f"--s3-bucket={bucket}",
-        "--quality-report-dir=quality-reports",
-        "--upload-quality-report-to-s3",
-        "--quality-report-s3-prefix=quality-reports",
     )
 
     result.assert_outcomes(passed=1)

@@ -1,0 +1,15 @@
+{
+  "etl_env": "local",
+  "dataset": "orders",
+  "s3": {
+    "endpoint": "http://localhost:9000",
+    "access_key": "minioadmin",
+    "secret_key": "minioadmin",
+    "bucket": "data-lake"
+  },
+  "quality_report": {
+    "local_dir": "quality-reports",
+    "upload_to_s3": true,
+    "s3_prefix": "quality-reports"
+  }
+}

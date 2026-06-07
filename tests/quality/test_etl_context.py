@@ -9,10 +9,12 @@ def test_etl_context_is_created(etl_context):
     """
     assert etl_context["env"] == "local"
     assert etl_context["dataset"] == "orders"
-    assert etl_context["run_id"] == "run_001"
-    assert etl_context["quality_report_dir"] == "quality-reports"
-    assert etl_context["quality_report_s3_prefix"] == "quality-reports"
-    assert etl_context["upload_quality_report_to_s3"] is True
+
+    assert etl_context["run_id"].startswith("orders_")
+
+    assert etl_context["quality_report"]["local_dir"] == "quality-reports"
+    assert etl_context["quality_report"]["s3_prefix"] == "quality-reports"
+    assert etl_context["quality_report"]["upload_to_s3"] is True
 
     assert etl_context["s3"]["endpoint"] == "http://localhost:9000"
     assert etl_context["s3"]["bucket"] == "data-lake"
