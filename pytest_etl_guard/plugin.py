@@ -70,6 +70,20 @@ def pytest_addoption(parser):
         help="Local directory for ETL quality reports",
     )
 
+    group.addoption(
+        "--upload-quality-report-to-s3",
+        action="store_true",
+        default=False,
+        help="Upload generated quality report to S3-compatible storage",
+    )
+
+    group.addoption(
+        "--quality-report-s3-prefix",
+        action="store",
+        default="quality-reports",
+        help="S3 prefix for uploaded ETL quality reports",
+    )
+
 
 def pytest_configure(config):
     """
@@ -93,8 +107,6 @@ def pytest_configure(config):
         "s3: mark test as S3-related check",
     )
 
-    # Здесь мы создаем внутренние поля плагина.
-    # В них будем собирать результаты тестов во время запуска pytest.
     config._etl_guard_started_at = _utc_now()
     config._etl_guard_results = []
 
@@ -104,32 +116,16 @@ def pytest_runtest_makereport(item, call):
     """
     pytest_runtest_makereport — hook pytest.
 
-    Он вызывается при формировании отчета по каждому тесту.
-
-    Нам важно перехватить результат test call:
-    - passed
-    - failed
-    - skipped
-
-    hookwrapper=True нужен, чтобы сначала дать pytest сформировать
-    стандартный отчет, а потом получить его через outcome.get_result().
+    Перехватывает результат выполнения каждого ETL/data quality теста.
     """
     outcome = yield
     report = outcome.get_result()
 
-    # У одного теста есть несколько фаз:
-    # setup — подготовка
-    # call — сам тест
-    # teardown — завершение
-    #
-    # Нас интересует именно call, чтобы не записывать один тест три раза.
     if report.when != "call":
         return
 
     marker_names = [marker.name for marker in item.iter_markers()]
 
-    # В quality report включаем только тесты, которые относятся к нашему ETL-плагину.
-    # Обычные unit-тесты проекта сюда попадать не должны.
     if "etl" not in marker_names and "quality" not in marker_names:
         return
 
@@ -151,20 +147,19 @@ def pytest_sessionfinish(session, exitstatus):
     """
     pytest_sessionfinish — hook pytest.
 
-    Он вызывается один раз в самом конце запуска pytest.
-
-    Здесь мы собираем общий отчет:
-    - параметры запуска;
-    - список тестов;
-    - summary;
-    - время старта и завершения;
-    - exitstatus pytest.
-
-    После этого сохраняем report.json локально.
+    В конце pytest-сессии:
+    1. собирает общий quality report;
+    2. сохраняет его локально;
+    3. при включенной опции загружает report.json в S3/MinIO.
     """
     config = session.config
 
     results = getattr(config, "_etl_guard_results", [])
+
+    local_report_path = _build_report_path(config)
+    s3_report_key = _build_report_s3_key(config)
+
+    upload_to_s3 = config.getoption("--upload-quality-report-to-s3")
 
     report = {
         "run_id": config.getoption("--run-id"),
@@ -177,20 +172,25 @@ def pytest_sessionfinish(session, exitstatus):
             "endpoint": config.getoption("--s3-endpoint"),
             "bucket": config.getoption("--s3-bucket"),
         },
+        "quality_report": {
+            "local_path": str(local_report_path),
+            "upload_to_s3": upload_to_s3,
+            "s3_key": s3_report_key if upload_to_s3 else None,
+        },
         "summary": _build_summary(results),
         "tests": results,
     }
 
-    report_path = _build_report_path(config)
+    report_json = json.dumps(report, ensure_ascii=False, indent=2)
 
-    report_path.parent.mkdir(parents=True, exist_ok=True)
+    _save_report_locally(local_report_path, report_json)
 
-    report_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    print(f"\nETL Guard quality report: {local_report_path}")
 
-    print(f"\nETL Guard quality report: {report_path}")
+    if upload_to_s3:
+        _upload_report_to_s3(config, s3_report_key, report_json)
+        bucket = config.getoption("--s3-bucket")
+        print(f"ETL Guard quality report uploaded: s3://{bucket}/{s3_report_key}")
 
 
 @pytest.fixture
@@ -198,14 +198,20 @@ def etl_context(request):
     """
     Общий контекст ETL-запуска.
 
-    В следующих итерациях сюда можно будет добавить Kafka, Spark, Iceberg
-    и другие настройки.
+    Содержит параметры окружения, dataset, run_id, настройки S3
+    и настройки quality report.
     """
     return {
         "env": request.config.getoption("--etl-env"),
         "dataset": request.config.getoption("--dataset"),
         "run_id": request.config.getoption("--run-id"),
         "quality_report_dir": request.config.getoption("--quality-report-dir"),
+        "quality_report_s3_prefix": request.config.getoption(
+            "--quality-report-s3-prefix"
+        ),
+        "upload_quality_report_to_s3": request.config.getoption(
+            "--upload-quality-report-to-s3"
+        ),
         "s3": {
             "endpoint": request.config.getoption("--s3-endpoint"),
             "bucket": request.config.getoption("--s3-bucket"),
@@ -221,12 +227,7 @@ def s3_client(request):
     Сейчас он подключается к локальному MinIO, но в будущем через эти же
     параметры можно подключаться к любому S3-compatible хранилищу.
     """
-    return boto3.client(
-        "s3",
-        endpoint_url=request.config.getoption("--s3-endpoint"),
-        aws_access_key_id=request.config.getoption("--s3-access-key"),
-        aws_secret_access_key=request.config.getoption("--s3-secret-key"),
-    )
+    return _build_s3_client(request.config)
 
 
 @pytest.fixture
@@ -235,6 +236,21 @@ def s3_bucket(request):
     Название bucket, с которым работают ETL-проверки.
     """
     return request.config.getoption("--s3-bucket")
+
+
+def _build_s3_client(config):
+    """
+    Создает boto3 S3 client на основе pytest CLI-опций.
+
+    Важно: эту функцию можно использовать и внутри fixture,
+    и внутри pytest_sessionfinish, где fixture напрямую недоступны.
+    """
+    return boto3.client(
+        "s3",
+        endpoint_url=config.getoption("--s3-endpoint"),
+        aws_access_key_id=config.getoption("--s3-access-key"),
+        aws_secret_access_key=config.getoption("--s3-secret-key"),
+    )
 
 
 def _build_summary(results):
@@ -259,9 +275,57 @@ def _build_report_path(config):
     report_dir = Path(config.getoption("--quality-report-dir"))
     run_id = config.getoption("--run-id")
 
-    safe_run_id = run_id.replace("/", "_").replace(" ", "_")
+    safe_run_id = _make_safe_path_part(run_id)
 
     return report_dir / safe_run_id / "report.json"
+
+
+def _build_report_s3_key(config):
+    """
+    Формирует S3 key для quality report.
+
+    Например:
+    quality-reports/run_001/report.json
+    """
+    prefix = config.getoption("--quality-report-s3-prefix")
+    run_id = config.getoption("--run-id")
+
+    clean_prefix = prefix.strip("/")
+    safe_run_id = _make_safe_path_part(run_id)
+
+    return f"{clean_prefix}/{safe_run_id}/report.json"
+
+
+def _save_report_locally(report_path, report_json):
+    """
+    Сохраняет report.json на локальный диск.
+    """
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report_json, encoding="utf-8")
+
+
+def _upload_report_to_s3(config, s3_key, report_json):
+    """
+    Загружает report.json в S3-compatible хранилище.
+
+    Используем put_object, потому что отчет уже есть в памяти как строка.
+    """
+    s3_client = _build_s3_client(config)
+    bucket = config.getoption("--s3-bucket")
+
+    s3_client.put_object(
+        Bucket=bucket,
+        Key=s3_key,
+        Body=report_json.encode("utf-8"),
+        ContentType="application/json",
+    )
+
+
+def _make_safe_path_part(value):
+    """
+    Делает значение безопасным для использования в локальном пути и S3 key.
+    """
+    return value.replace("/", "_").replace(" ", "_")
 
 
 def _utc_now():
