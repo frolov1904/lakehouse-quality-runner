@@ -10,6 +10,7 @@ def test_etl_context_is_created(etl_context):
     assert etl_context["env"] == "local"
     assert etl_context["dataset"] == "orders"
     assert etl_context["run_id"] == "run_001"
+    assert etl_context["quality_report_dir"] == "quality-reports"
 
     assert etl_context["s3"]["endpoint"] == "http://localhost:9000"
     assert etl_context["s3"]["bucket"] == "data-lake"

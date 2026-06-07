@@ -26,7 +26,7 @@ def test_orders_raw_file_exists(s3_client, s3_bucket):
     Это базовая ETL-проверка: если входного файла нет,
     pipeline не сможет обработать данные.
     """
-    response = s3_client.head_object(      #head_object используется для получения метаданных объекта, не загружая его содержимое
+    response = s3_client.head_object(  # head_object используется для получения метаданных объекта, не загружая его содержимое
         Bucket=s3_bucket,
         Key=ORDERS_RAW_KEY,
     )
