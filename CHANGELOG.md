@@ -92,3 +92,7 @@
 Через boto3 написал загрузку тестового raw CSV-файла в bucket data-lake. 
 Затем расширил свой pytest-плагин: добавил S3 CLI-опции, fixture s3_client и marker s3. 
 После этого написал первые data quality тесты: проверку существования объекта в S3, проверку непустого файла и проверку обязательных колонок CSV.
+
+На третьей итерации я расширил pytest-плагин и добавил сбор quality report. 
+Через hook pytest_runtest_makereport я перехватываю результат каждого ETL-теста: passed, failed, skipped, duration, markers и ошибку при падении. 
+Через hook pytest_sessionfinish в конце pytest-сессии формирую общий report.json с run_id, dataset, окружением, S3-настройками, summary и списком всех проверок.
