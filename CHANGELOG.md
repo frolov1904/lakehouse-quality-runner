@@ -204,6 +204,55 @@
 - Проверена загрузка `orders.csv` через API в `s3://data-lake/raw/orders/orders.csv`.
 - Проверено, что общий запуск тестов проходит успешно.
 
+## [0.7.0] — Публикация Kafka-события после загрузки файла
+
+### Добавлено
+
+- Добавлен сервис Kafka в `docker-compose.yml`.
+- Добавлена зависимость `confluent-kafka`.
+- В `etl_guard.local.json` добавлен блок `kafka`.
+- Добавлены настройки Kafka:
+  - `enabled`;
+  - `bootstrap_servers`;
+  - `topic_file_uploaded`.
+- Добавлен dataclass `KafkaSettings`.
+- Расширен dataclass `AppSettings`: добавлен блок Kafka-настроек.
+- Добавлен модуль `app.services.kafka_events`.
+- Добавлен dataclass `FileUploadedEvent`.
+- Добавлен сервис `KafkaEventPublisher`.
+- Добавлена функция `build_file_uploaded_event`.
+- После загрузки файла через `POST /datasets/{dataset}/upload` теперь публикуется событие `file_uploaded` в Kafka topic `etl.file_uploaded`.
+- В ответ endpoint загрузки добавлен блок `event`:
+  - `published`;
+  - `topic`;
+  - `event_id`.
+- Добавлен API-тест `test_upload_dataset_file_publishes_kafka_event`, который проверяет публикацию Kafka-события после загрузки файла.
+- В тесты добавлены helper-функции:
+  - `_ensure_topic_exists`;
+  - `_poll_event_by_id`;
+  - `_wait_until_consumer_assigned`.
+
+### Изменено
+
+- Endpoint `POST /datasets/{dataset}/upload` теперь выполняет две операции:
+  - загружает файл в raw-слой S3;
+  - публикует событие о загрузке файла в Kafka.
+- API-тест загрузки файла теперь дополнительно проверяет, что событие было опубликовано.
+- Kafka consumer в интеграционном тесте теперь использует `auto.offset.reset=earliest`, чтобы надежно находить опубликованное событие по `event_id`.
+- Добавлено ожидание partition assignment перед публикацией тестового события.
+- Добавлено безопасное закрытие Kafka consumer через `finally`.
+- Обновлена версия проекта до `0.7.0`.
+
+### Проверка
+
+- Проверено, что Kafka поднимается через Docker Compose.
+- Проверено, что FastAPI после загрузки файла возвращает `event_id`.
+- Проверено, что событие `file_uploaded` публикуется в topic `etl.file_uploaded`.
+- Проверено, что Kafka consumer в тесте может прочитать опубликованное событие.
+- Исправлена нестабильность Kafka-теста, при которой consumer мог не успеть получить partition assignment и пропустить событие.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -224,3 +273,5 @@
 На пятой итерации я упростил запуск плагина и сделал рефакторинг. Вместо длинной команды с большим количеством CLI-флагов добавил конфигурационный файл etl_guard.local.json, а run_id теперь генерируется автоматически. CLI-флаги остались, но теперь они нужны только для переопределения настроек. Также я разнес код по модулям: config.py, s3.py, reporting.py, а plugin.py оставил как точку входа для pytest hooks и fixtures.
 
 На шестой итерации я добавил FastAPI-слой. Реализовал endpoint для загрузки CSV-файлов в raw-слой S3 и endpoint для просмотра объектов по dataset. Внутри API используется отдельный S3Storage-сервис на boto3, а настройки берутся из etl_guard.local.json. Также я добавил API-тесты через TestClient, которые проверяют healthcheck, загрузку файла в MinIO/S3 и получение списка объектов.
+
+На седьмой итерации я добавил Kafka и сделал публикацию события после загрузки файла. Теперь FastAPI после сохранения CSV в S3 отправляет событие file_uploaded в topic etl.file_uploaded. Для этого я добавил Kafka в Docker Compose, подключил confluent-kafka, сделал сервис KafkaEventPublisher и написал интеграционный тест, который через consumer проверяет, что событие реально попало в Kafka.

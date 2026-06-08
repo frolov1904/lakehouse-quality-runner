@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lakehouse-quality-runner"
-version = "0.6.0"
+version = "0.7.0"
 description = "ETL quality runner with custom pytest plugin for lakehouse pipelines"
 requires-python = ">=3.9"
 dependencies = [
@@ -13,7 +13,8 @@ dependencies = [
     "fastapi>=0.110.0",
     "uvicorn>=0.27.0",
     "python-multipart>=0.0.9",
-    "httpx>=0.27.0"
+    "httpx>=0.27.0",
+    "confluent-kafka>=2.4.0"
 ]
 
 [project.optional-dependencies]

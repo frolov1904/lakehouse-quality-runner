@@ -26,5 +26,11 @@ services:
       exit 0;
       "
 
+  kafka:
+    image: apache/kafka:4.1.2
+    container_name: lqr-kafka
+    ports:
+      - "9092:9092"
+
 volumes:
   minio_data:

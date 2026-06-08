@@ -15,16 +15,21 @@ class S3Settings:
 
 
 @dataclass(frozen=True)
+class KafkaSettings:
+    enabled: bool
+    bootstrap_servers: str
+    topic_file_uploaded: str
+
+
+@dataclass(frozen=True)
 class AppSettings:
     s3: S3Settings
+    kafka: KafkaSettings
 
 
 def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
     """
     Загружает настройки приложения из etl_guard.local.json.
-
-    Сейчас FastAPI-приложение использует тот же локальный конфиг,
-    что и pytest-плагин.
     """
     path = Path(config_path)
 
@@ -37,6 +42,7 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
         raw_config = json.load(file)
 
     s3_config = raw_config["s3"]
+    kafka_config = raw_config.get("kafka", {})
 
     return AppSettings(
         s3=S3Settings(
@@ -44,5 +50,16 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
             access_key=s3_config["access_key"],
             secret_key=s3_config["secret_key"],
             bucket=s3_config["bucket"],
-        )
+        ),
+        kafka=KafkaSettings(
+            enabled=kafka_config.get("enabled", False),
+            bootstrap_servers=kafka_config.get(
+                "bootstrap_servers",
+                "localhost:9092",
+            ),
+            topic_file_uploaded=kafka_config.get(
+                "topic_file_uploaded",
+                "etl.file_uploaded",
+            ),
+        ),
     )

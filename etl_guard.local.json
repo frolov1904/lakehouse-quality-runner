@@ -11,5 +11,10 @@
     "local_dir": "quality-reports",
     "upload_to_s3": true,
     "s3_prefix": "quality-reports"
+  },
+  "kafka": {
+    "enabled": true,
+    "bootstrap_servers": "localhost:9092",
+    "topic_file_uploaded": "etl.file_uploaded"
   }
 }
