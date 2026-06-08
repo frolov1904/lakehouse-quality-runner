@@ -19,12 +19,22 @@ class KafkaSettings:
     enabled: bool
     bootstrap_servers: str
     topic_file_uploaded: str
+    quality_worker_group: str
+    auto_offset_reset: str
+
+
+@dataclass(frozen=True)
+class LakehouseSettings:
+    raw_prefix: str
+    silver_prefix: str
+    local_tmp_dir: str
 
 
 @dataclass(frozen=True)
 class AppSettings:
     s3: S3Settings
     kafka: KafkaSettings
+    lakehouse: LakehouseSettings
 
 
 def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
@@ -43,6 +53,7 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
 
     s3_config = raw_config["s3"]
     kafka_config = raw_config.get("kafka", {})
+    lakehouse_config = raw_config.get("lakehouse", {})
 
     return AppSettings(
         s3=S3Settings(
@@ -60,6 +71,22 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
             topic_file_uploaded=kafka_config.get(
                 "topic_file_uploaded",
                 "etl.file_uploaded",
+            ),
+            quality_worker_group=kafka_config.get(
+                "quality_worker_group",
+                "lqr-quality-worker",
+            ),
+            auto_offset_reset=kafka_config.get(
+                "auto_offset_reset",
+                "earliest",
+            ),
+        ),
+        lakehouse=LakehouseSettings(
+            raw_prefix=lakehouse_config.get("raw_prefix", "raw"),
+            silver_prefix=lakehouse_config.get("silver_prefix", "silver"),
+            local_tmp_dir=lakehouse_config.get(
+                "local_tmp_dir",
+                ".tmp/lakehouse",
             ),
         ),
     )

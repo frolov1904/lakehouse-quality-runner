@@ -92,3 +92,22 @@ def build_file_uploaded_event(
         content_type=content_type,
         occurred_at=datetime.now(timezone.utc).isoformat(),
     )
+def parse_file_uploaded_event(message_value: bytes) -> FileUploadedEvent:
+    """
+    Преобразует Kafka message value в FileUploadedEvent.
+
+    Kafka хранит value как bytes, поэтому сначала декодируем JSON,
+    а потом собираем dataclass события.
+    """
+    payload = json.loads(message_value.decode("utf-8"))
+
+    return FileUploadedEvent(
+        event_id=payload["event_id"],
+        event_type=payload["event_type"],
+        dataset=payload["dataset"],
+        bucket=payload["bucket"],
+        key=payload["key"],
+        filename=payload["filename"],
+        content_type=payload["content_type"],
+        occurred_at=payload["occurred_at"],
+    )

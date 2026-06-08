@@ -126,6 +126,10 @@ def register_etl_guard_markers(config):
         "markers",
         "s3: mark test as S3-related check",
     )
+    config.addinivalue_line(
+        "markers",
+        "spark: mark test as Spark-related check",
+    )
 
 
 def resolve_etl_guard_config(pytest_config):

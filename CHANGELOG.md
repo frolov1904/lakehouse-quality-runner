@@ -253,6 +253,93 @@
 - Проверено, что общий запуск тестов проходит успешно командой:
   - `pytest tests`.
 
+## [0.8.0] — Kafka consumer worker для запуска quality checks
+
+### Добавлено
+
+- Добавлен Kafka consumer worker для обработки событий `file_uploaded`.
+- Добавлен модуль `app.workers.quality_worker`.
+- Добавлен класс `QualityWorker`.
+- Добавлена функция `build_quality_run_id`.
+- Добавлен сервис `PytestQualityRunner` в модуле `app.services.quality_runner`.
+- Добавлен dataclass `QualityRunResult`.
+- Добавлена функция `parse_file_uploaded_event` для преобразования Kafka message value в `FileUploadedEvent`.
+- Добавлен скрипт `scripts/run_quality_worker.py` для запуска worker’а.
+- В `etl_guard.local.json` добавлены Kafka-настройки worker’а:
+  - `quality_worker_group`;
+  - `auto_offset_reset`.
+- Добавлены тесты:
+  - проверка формирования команды запуска pytest;
+  - проверка парсинга Kafka-события;
+  - проверка генерации `run_id` на основе `event_id`.
+
+### Изменено
+
+- Расширен dataclass `KafkaSettings`: добавлены настройки consumer group и offset reset.
+- Worker после получения события `file_uploaded` запускает quality checks через `python -m pytest tests/quality`.
+- Для каждого события формируется отдельный `run_id` вида `<dataset>_<short_event_id>`.
+- После успешной обработки сообщения worker вручную коммитит Kafka offset.
+- Обновлена версия проекта до `0.8.0`.
+
+### Проверка
+
+- Проверено, что worker запускается командой:
+  - `python scripts/run_quality_worker.py --once`.
+- Проверено, что worker читает событие `file_uploaded` из Kafka topic `etl.file_uploaded`.
+- Проверено, что после получения события worker запускает ETL/data quality проверки.
+- Проверено, что pytest-плагин формирует `report.json` для события, обработанного worker’ом.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
+## [0.9.0] — Spark job raw CSV → silver Parquet
+
+### Добавлено
+
+- Добавлена зависимость `pyspark`.
+- В `etl_guard.local.json` добавлен блок `lakehouse`.
+- Добавлены настройки lakehouse-слоев:
+  - `raw_prefix`;
+  - `silver_prefix`;
+  - `local_tmp_dir`.
+- Добавлен dataclass `LakehouseSettings`.
+- Расширен dataclass `AppSettings`: добавлен блок `lakehouse`.
+- Расширен сервис `S3Storage`:
+  - добавлен метод `download_file`;
+  - добавлен метод `upload_file`;
+  - добавлен метод `upload_directory`;
+  - добавлен метод `delete_prefix`.
+- Добавлен модуль `app.services.orders_spark_job`.
+- Добавлен класс `OrdersSparkJob`.
+- Добавлен dataclass `OrdersSparkJobResult`.
+- Добавлен Spark job для обработки `orders` dataset:
+  - скачивание raw CSV из S3;
+  - чтение CSV через Spark;
+  - явная схема входных данных;
+  - фильтрация невалидных строк;
+  - приведение `created_at` к date;
+  - запись результата в Parquet;
+  - загрузка Parquet-файлов в silver prefix в S3.
+- Добавлен скрипт `scripts/run_orders_spark_job.py`.
+- Зарегистрирован pytest marker `spark`.
+- Добавлен Spark integration test `test_orders_spark_job_writes_silver_parquet`.
+
+### Изменено
+
+- Проект теперь содержит первый полноценный Spark processing step.
+- Данные после raw-слоя могут быть преобразованы в silver-слой.
+- Обновлена версия проекта до `0.9.0`.
+
+### Проверка
+
+- Проверено, что Spark job запускается командой:
+  - `python scripts/run_orders_spark_job.py`.
+- Проверено, что raw CSV читается из S3/MinIO.
+- Проверено, что Spark job записывает результат в Parquet.
+- Проверено, что Parquet-файлы загружаются в `s3://data-lake/silver/orders/`.
+- Проверено, что Spark integration test проходит успешно.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -275,3 +362,7 @@
 На шестой итерации я добавил FastAPI-слой. Реализовал endpoint для загрузки CSV-файлов в raw-слой S3 и endpoint для просмотра объектов по dataset. Внутри API используется отдельный S3Storage-сервис на boto3, а настройки берутся из etl_guard.local.json. Также я добавил API-тесты через TestClient, которые проверяют healthcheck, загрузку файла в MinIO/S3 и получение списка объектов.
 
 На седьмой итерации я добавил Kafka и сделал публикацию события после загрузки файла. Теперь FastAPI после сохранения CSV в S3 отправляет событие file_uploaded в topic etl.file_uploaded. Для этого я добавил Kafka в Docker Compose, подключил confluent-kafka, сделал сервис KafkaEventPublisher и написал интеграционный тест, который через consumer проверяет, что событие реально попало в Kafka.
+
+На восьмой итерации я добавил Kafka consumer worker. Теперь после того как FastAPI публикует событие file_uploaded, worker читает это событие из Kafka и запускает quality checks через python -m pytest. Для каждого события формируется отдельный run_id, а результат проверок сохраняется через уже существующий pytest-плагин в виде report.json локально и в S3.
+
+На девятой итерации я добавил Spark job для обработки данных. Он берет raw/orders/orders.csv из S3/MinIO, читает его через PySpark, очищает данные, фильтрует невалидные строки и записывает результат в Parquet. После этого Parquet-файлы загружаются обратно в S3 в silver/orders/. Это первый полноценный шаг обработки данных в pipeline: raw CSV → silver Parquet.

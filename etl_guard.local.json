@@ -15,6 +15,13 @@
   "kafka": {
     "enabled": true,
     "bootstrap_servers": "localhost:9092",
-    "topic_file_uploaded": "etl.file_uploaded"
+    "topic_file_uploaded": "etl.file_uploaded",
+    "quality_worker_group": "lqr-quality-worker",
+    "auto_offset_reset": "earliest"
+  },
+  "lakehouse": {
+    "raw_prefix": "raw",
+    "silver_prefix": "silver",
+    "local_tmp_dir": ".tmp/lakehouse"
   }
 }
