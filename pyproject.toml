@@ -4,12 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lakehouse-quality-runner"
-version = "0.5.0"
+version = "0.6.0"
 description = "ETL quality runner with custom pytest plugin for lakehouse pipelines"
 requires-python = ">=3.9"
 dependencies = [
     "pytest>=8.0.0",
-    "boto3>=1.34.0"
+    "boto3>=1.34.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27.0"
 ]
 
 [project.optional-dependencies]
@@ -21,5 +25,5 @@ dev = [
 etl_guard = "pytest_etl_guard.plugin"
 
 [tool.setuptools.packages.find]
-include = ["pytest_etl_guard*"]
+include = ["pytest_etl_guard*", "app*"]
 exclude = ["data*", "tests*", "scripts*", "quality-reports*"]
