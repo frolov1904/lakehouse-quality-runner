@@ -519,6 +519,54 @@
 - Проверено, что GitLab CI configuration содержит stages `lint`, `test`, `quality`.
 - Проверено, что `quality-reports/` сохраняется как artifact.
 
+## [0.14.0] — Стабилизация, очистка S3 и demo-режим
+
+### Добавлено
+
+- Добавлен скрипт `scripts/clean_lakehouse_storage.py`.
+- Добавлена очистка MinIO/S3 prefix'ов:
+  - `quality-reports/`;
+  - `test-artifacts/`;
+  - `raw/pytester/`;
+  - `raw/test/`;
+  - `silver/test/`.
+- Добавлен режим demo-очистки:
+  - `python scripts/clean_lakehouse_storage.py --demo-reset`.
+- Добавлен режим полной очистки lakehouse bucket:
+  - `python scripts/clean_lakehouse_storage.py --all`.
+- Добавлена очистка локальных артефактов:
+  - `.tmp/`;
+  - `quality-reports/`.
+- Добавлен скрипт `scripts/query_orders_iceberg_table.py` для просмотра Iceberg-таблицы.
+- Добавлен файл `PROJECT_MAP.md` с картой проекта.
+- В `Makefile` добавлены demo-команды:
+  - `make clean-storage`;
+  - `make demo-reset`;
+  - `make demo-prepare`;
+  - `make demo-run-spark`;
+  - `make demo-run-iceberg`;
+  - `make demo-query-iceberg`;
+  - `make demo-test-quality`;
+  - `make demo-full`.
+
+### Изменено
+
+- Расширен демонстрационный датасет `data/orders.csv`.
+- Датасет теперь содержит валидные и невалидные строки для демонстрации очистки данных.
+- Проект стал удобнее для локальной демонстрации.
+- Обновлена версия проекта до `0.14.0`.
+
+### Проверка
+
+- Проверено, что MinIO/S3 можно очистить командой:
+  - `python scripts/clean_lakehouse_storage.py --demo-reset`.
+- Проверено, что расширенный датасет загружается в raw-слой.
+- Проверено, что Spark job обрабатывает расширенный датасет и записывает silver Parquet.
+- Проверено, что Iceberg job создает таблицу `local.analytics.orders`.
+- Проверено, что Iceberg-таблицу можно посмотреть командой:
+  - `python scripts/query_orders_iceberg_table.py`.
+- Проверено, что demo-сценарий можно запускать через Makefile.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -551,3 +599,5 @@
 На одиннадцатой итерации я сделал worker полноценным оркестратором pipeline. Теперь после Kafka-события file_uploaded он запускает Spark job raw → silver, а потом запускает pytest quality checks. То есть цепочка стала полной: загрузка файла → Kafka event → worker → Spark обработка → проверки качества → report.json в S3.
 
 На двенадцатой итерации я добавил Iceberg. Spark job раньше писал результат в silver/orders/ как Parquet-файлы, а теперь отдельный Iceberg job создает на их основе таблицу local.analytics.orders. Для этого я настроил Spark Iceberg runtime, Hadoop catalog и локальный Iceberg warehouse. Таблица читается через Spark SQL, а integration test проверяет, что Iceberg-таблица создается и содержит данные.
+
+На тринадцатой итерации я добавил GitLab CI/CD. Pipeline состоит из stages lint, test и quality: проверка кода через ruff, быстрые unit/plugin/service тесты и smoke-проверка pytest-плагина с сохранением quality report как artifact. Также я добавил Makefile, чтобы локально запускать инфраструктуру, Spark job, Iceberg job и тесты короткими командами.
