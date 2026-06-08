@@ -340,6 +340,57 @@
 - Проверено, что общий запуск тестов проходит успешно командой:
   - `pytest tests`.
 
+## [0.10.0] — Data quality проверки silver-слоя
+
+### Добавлено
+
+- Зарегистрирован pytest marker `silver`.
+- Добавлен файл `tests/quality/test_orders_silver.py`.
+- Добавлены проверки silver-слоя `orders`:
+  - проверка наличия marker-файла `_SUCCESS`;
+  - проверка наличия `.parquet` файлов;
+  - проверка, что silver Parquet читается через Spark;
+  - проверка, что silver Parquet не пустой;
+  - проверка схемы silver-данных;
+  - проверка business/data quality правил.
+- Добавлены ожидаемые правила схемы для `silver/orders`:
+  - `order_id: int`;
+  - `user_id: int`;
+  - `amount: double`;
+  - `status: string`;
+  - `created_at: date`.
+- Добавлены data quality правила для silver-слоя:
+  - `order_id` не должен быть `null`;
+  - `user_id` не должен быть `null`;
+  - `amount` не должен быть `null`;
+  - `amount` должен быть больше или равен 0;
+  - `status` не должен быть `null`;
+  - `status` должен входить в допустимый список: `new`, `paid`, `cancelled`.
+- Добавлены helper-функции для silver-проверок:
+  - `_read_silver_orders_df`;
+  - `_list_silver_parquet_keys`;
+  - `_list_s3_keys`.
+
+### Изменено
+
+- Плагин теперь поддерживает отдельную маркировку проверок silver-слоя через `@pytest.mark.silver`.
+- Quality report теперь может включать проверки не только raw-слоя, но и silver-слоя.
+- Обновлена версия проекта до `0.10.0`.
+
+### Проверка
+
+- Проверено, что после Spark job в MinIO/S3 появляется silver-слой:
+  - `s3://data-lake/silver/orders/`.
+- Проверено, что в silver-слое есть `_SUCCESS`.
+- Проверено, что в silver-слое есть `.parquet` файлы.
+- Проверено, что Parquet-файлы можно скачать из S3 и прочитать через Spark.
+- Проверено, что silver-данные имеют ожидаемую схему.
+- Проверено, что silver-данные проходят business/data quality правила.
+- Проверено, что silver-проверки запускаются командой:
+  - `pytest tests/quality -m silver`.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -366,3 +417,5 @@
 На восьмой итерации я добавил Kafka consumer worker. Теперь после того как FastAPI публикует событие file_uploaded, worker читает это событие из Kafka и запускает quality checks через python -m pytest. Для каждого события формируется отдельный run_id, а результат проверок сохраняется через уже существующий pytest-плагин в виде report.json локально и в S3.
 
 На девятой итерации я добавил Spark job для обработки данных. Он берет raw/orders/orders.csv из S3/MinIO, читает его через PySpark, очищает данные, фильтрует невалидные строки и записывает результат в Parquet. После этого Parquet-файлы загружаются обратно в S3 в silver/orders/. Это первый полноценный шаг обработки данных в pipeline: raw CSV → silver Parquet.
+
+На десятой итерации я добавил data quality проверки silver-слоя. Теперь pytest-плагин проверяет не только raw CSV, но и результат Spark job в silver/orders/: наличие _SUCCESS, наличие Parquet-файлов, читаемость через Spark, корректную схему и бизнес-правила качества данных. Это делает pipeline ближе к реальному ETL-процессу, где важно валидировать не только входные данные, но и результат обработки.
