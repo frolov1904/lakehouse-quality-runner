@@ -28,6 +28,9 @@ class LakehouseSettings:
     raw_prefix: str
     silver_prefix: str
     local_tmp_dir: str
+    iceberg_warehouse: str
+    iceberg_catalog: str
+    iceberg_namespace: str
 
 
 @dataclass(frozen=True)
@@ -87,6 +90,18 @@ def load_settings(config_path: str = DEFAULT_CONFIG_PATH) -> AppSettings:
             local_tmp_dir=lakehouse_config.get(
                 "local_tmp_dir",
                 ".tmp/lakehouse",
+            ),
+            iceberg_warehouse=lakehouse_config.get(
+                "iceberg_warehouse",
+                ".tmp/iceberg/warehouse",
+            ),
+            iceberg_catalog=lakehouse_config.get(
+                "iceberg_catalog",
+                "local",
+            ),
+            iceberg_namespace=lakehouse_config.get(
+                "iceberg_namespace",
+                "analytics",
             ),
         ),
     )

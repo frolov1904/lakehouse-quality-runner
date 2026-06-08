@@ -434,6 +434,46 @@
 - Проверено, что общий запуск тестов проходит успешно командой:
   - `pytest tests`.
 
+## [0.12.0] — Iceberg table поверх silver-данных
+
+### Добавлено
+
+- Добавлена интеграция Apache Iceberg через Spark runtime package.
+- В `etl_guard.local.json` добавлены настройки Iceberg:
+  - `iceberg_warehouse`;
+  - `iceberg_catalog`;
+  - `iceberg_namespace`.
+- Расширен dataclass `LakehouseSettings`: добавлены настройки Iceberg.
+- Добавлен модуль `app.services.orders_iceberg_job`.
+- Добавлен класс `OrdersIcebergJob`.
+- Добавлен dataclass `OrdersIcebergJobResult`.
+- Добавлен Iceberg job для создания таблицы `local.analytics.orders` на основе `silver/orders` Parquet-файлов.
+- Добавлен локальный Iceberg warehouse:
+  - `.tmp/iceberg/warehouse`.
+- Добавлен скрипт `scripts/run_orders_iceberg_job.py`.
+- Зарегистрирован pytest marker `iceberg`.
+- Добавлен integration test `test_orders_iceberg_job_creates_readable_table`.
+
+### Изменено
+
+- Проект теперь содержит Iceberg table layer поверх silver-данных.
+- Silver Parquet-файлы теперь можно использовать как источник для Iceberg-таблицы.
+- Обновлена версия проекта до `0.12.0`.
+
+### Проверка
+
+- Проверено, что Iceberg job запускается командой:
+  - `python scripts/run_orders_iceberg_job.py`.
+- Проверено, что SparkSession создается с Iceberg runtime package.
+- Проверено, что создается namespace `local.analytics`.
+- Проверено, что создается Iceberg-таблица `local.analytics.orders`.
+- Проверено, что таблица читается через Spark SQL.
+- Проверено, что Iceberg metadata появляется в локальном warehouse:
+  - `.tmp/iceberg/warehouse`.
+- Проверено, что Iceberg integration test проходит успешно.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -464,3 +504,5 @@
 На десятой итерации я добавил data quality проверки silver-слоя. Теперь pytest-плагин проверяет не только raw CSV, но и результат Spark job в silver/orders/: наличие _SUCCESS, наличие Parquet-файлов, читаемость через Spark, корректную схему и бизнес-правила качества данных. Это делает pipeline ближе к реальному ETL-процессу, где важно валидировать не только входные данные, но и результат обработки.
 
 На одиннадцатой итерации я сделал worker полноценным оркестратором pipeline. Теперь после Kafka-события file_uploaded он запускает Spark job raw → silver, а потом запускает pytest quality checks. То есть цепочка стала полной: загрузка файла → Kafka event → worker → Spark обработка → проверки качества → report.json в S3.
+
+На двенадцатой итерации я добавил Iceberg. Spark job раньше писал результат в silver/orders/ как Parquet-файлы, а теперь отдельный Iceberg job создает на их основе таблицу local.analytics.orders. Для этого я настроил Spark Iceberg runtime, Hadoop catalog и локальный Iceberg warehouse. Таблица читается через Spark SQL, а integration test проверяет, что Iceberg-таблица создается и содержит данные.

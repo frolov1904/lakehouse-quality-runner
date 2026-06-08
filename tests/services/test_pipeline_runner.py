@@ -157,5 +157,8 @@ def _build_test_settings() -> AppSettings:
             raw_prefix="raw",
             silver_prefix="silver",
             local_tmp_dir=".tmp/lakehouse",
+            iceberg_warehouse=".tmp/iceberg/warehouse",
+            iceberg_catalog="local",
+            iceberg_namespace="analytics",
         ),
     )

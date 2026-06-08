@@ -134,6 +134,10 @@ def register_etl_guard_markers(config):
         "markers",
         "silver: mark test as silver layer quality check",
     )
+    config.addinivalue_line(
+        "markers",
+        "iceberg: mark test as Iceberg-related check",
+    )
 
 
 def resolve_etl_guard_config(pytest_config):
