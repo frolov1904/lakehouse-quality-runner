@@ -474,6 +474,51 @@
 - Проверено, что общий запуск тестов проходит успешно командой:
   - `pytest tests`.
 
+## [0.13.0] — GitLab CI/CD и команды запуска
+
+### Добавлено
+
+- Добавлен файл `.gitlab-ci.yml`.
+- Добавлен GitLab CI/CD pipeline со stages:
+  - `lint`;
+  - `test`;
+  - `quality`.
+- Добавлен job `lint` для проверки кода через `ruff`.
+- Добавлен job `unit_tests` для запуска быстрых unit/service/plugin тестов.
+- Добавлен job `quality_smoke` для smoke-проверки pytest-плагина.
+- Добавлено сохранение `quality-reports/` как GitLab CI artifact.
+- Добавлен `Makefile` с локальными командами:
+  - `make install`;
+  - `make install-dev`;
+  - `make lint`;
+  - `make test`;
+  - `make test-ci`;
+  - `make test-quality`;
+  - `make test-silver`;
+  - `make test-spark`;
+  - `make test-iceberg`;
+  - `make infra-up`;
+  - `make infra-down`;
+  - `make upload-sample`;
+  - `make spark-job`;
+  - `make iceberg-job`;
+  - `make worker`.
+
+### Изменено
+
+- В `pyproject.toml` добавлены настройки `ruff`.
+- Быстрые CI-тесты отделены от локальных integration-тестов.
+- Spark, Iceberg, Kafka и MinIO тесты явно остаются локальными integration-тестами.
+- Обновлена версия проекта до `0.13.0`.
+
+### Проверка
+
+- Проверено, что `ruff check .` запускается локально.
+- Проверено, что быстрый набор тестов запускается командой:
+  - `make test-ci`.
+- Проверено, что GitLab CI configuration содержит stages `lint`, `test`, `quality`.
+- Проверено, что `quality-reports/` сохраняется как artifact.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
