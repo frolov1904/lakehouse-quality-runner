@@ -3,17 +3,17 @@ from typing import Optional
 
 from confluent_kafka import Consumer, KafkaError
 
-from app.core.settings import KafkaSettings, load_settings
+from app.core.settings import AppSettings, KafkaSettings, load_settings
 from app.services.kafka_events import (
     FileUploadedEvent,
     parse_file_uploaded_event,
 )
-from app.services.quality_runner import PytestQualityRunner
+from app.services.pipeline_runner import FileUploadedPipelineRunner
 
 
 def build_quality_run_id(event: FileUploadedEvent) -> str:
     """
-    Формирует run_id для quality checks на основе Kafka-события.
+    Формирует run_id для pipeline на основе Kafka-события.
 
     Пример:
     orders_71c6b017
@@ -26,24 +26,21 @@ class QualityWorker:
     """
     Kafka consumer worker.
 
-    Читает события file_uploaded и запускает pytest quality checks.
+    Читает события file_uploaded и запускает pipeline:
+    Spark raw -> silver, затем pytest quality checks.
     """
 
     def __init__(
         self,
-        kafka_settings: KafkaSettings,
-        runner: Optional[PytestQualityRunner] = None,
+        app_settings: AppSettings,
+        pipeline_runner: Optional[FileUploadedPipelineRunner] = None,
     ):
-        self._kafka_settings = kafka_settings
-        self._runner = runner or PytestQualityRunner()
-        self._consumer = Consumer(
-            {
-                "bootstrap.servers": kafka_settings.bootstrap_servers,
-                "group.id": kafka_settings.quality_worker_group,
-                "auto.offset.reset": kafka_settings.auto_offset_reset,
-                "enable.auto.commit": False,
-            }
+        self._app_settings = app_settings
+        self._kafka_settings = app_settings.kafka
+        self._pipeline_runner = pipeline_runner or FileUploadedPipelineRunner(
+            settings=app_settings,
         )
+        self._consumer = self._build_consumer(self._kafka_settings)
 
     def run(self, once: bool = False) -> None:
         """
@@ -95,16 +92,37 @@ class QualityWorker:
             f"dataset={event.dataset}, key={event.key}, event_id={event.event_id}"
         )
 
-        print(f"Starting quality checks: dataset={event.dataset}, run_id={run_id}")
+        print(
+            "Starting pipeline: "
+            f"dataset={event.dataset}, run_id={run_id}, raw_key={event.key}"
+        )
 
-        result = self._runner.run(
-            dataset=event.dataset,
+        result = self._pipeline_runner.run(
+            event=event,
             run_id=run_id,
         )
 
         print(
-            "Quality checks finished: "
-            f"dataset={result.dataset}, run_id={result.run_id}, exit_code={result.exit_code}"
+            "Pipeline finished: "
+            f"dataset={result.dataset}, "
+            f"run_id={result.run_id}, "
+            f"status={result.status}, "
+            f"spark_rows_read={result.spark_rows_read}, "
+            f"spark_rows_written={result.spark_rows_written}, "
+            f"quality_exit_code={result.quality_exit_code}"
+        )
+
+    def _build_consumer(self, kafka_settings: KafkaSettings) -> Consumer:
+        """
+        Создает Kafka consumer.
+        """
+        return Consumer(
+            {
+                "bootstrap.servers": kafka_settings.bootstrap_servers,
+                "group.id": kafka_settings.quality_worker_group,
+                "auto.offset.reset": kafka_settings.auto_offset_reset,
+                "enable.auto.commit": False,
+            }
         )
 
 
@@ -125,7 +143,7 @@ def main() -> None:
     settings = load_settings()
 
     worker = QualityWorker(
-        kafka_settings=settings.kafka,
+        app_settings=settings,
     )
 
     worker.run(once=args.once)

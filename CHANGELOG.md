@@ -391,6 +391,49 @@
 - Проверено, что общий запуск тестов проходит успешно командой:
   - `pytest tests`.
 
+## [0.11.0] — Worker запускает Spark job и quality checks
+
+### Добавлено
+
+- Добавлен модуль `app.services.pipeline_runner`.
+- Добавлен dataclass `PipelineRunResult`.
+- Добавлен класс `FileUploadedPipelineRunner`.
+- Добавлена orchestration-логика для события `file_uploaded`:
+  - запуск Spark job `raw -> silver`;
+  - запуск pytest quality checks после Spark job;
+  - формирование общего результата pipeline.
+- Worker теперь запускает полный pipeline после получения Kafka-события.
+- Добавлен unit-тест `test_file_uploaded_pipeline_runner_runs_spark_then_quality_checks`.
+
+### Изменено
+
+- `QualityWorker` теперь принимает `AppSettings`, а не только `KafkaSettings`.
+- `QualityWorker` теперь использует `FileUploadedPipelineRunner`.
+- После получения события `file_uploaded` worker запускает:
+  - `OrdersSparkJob`;
+  - затем `PytestQualityRunner`.
+- Для Spark job используется `raw_key` из Kafka-события.
+- Silver prefix формируется по dataset:
+  - `silver/<dataset>`.
+- Worker теперь логирует итоговый статус pipeline:
+  - dataset;
+  - run_id;
+  - status;
+  - количество строк, прочитанных Spark;
+  - количество строк, записанных в silver;
+  - exit code quality checks.
+- Обновлена версия проекта до `0.11.0`.
+
+### Проверка
+
+- Проверено, что pipeline runner сначала запускает Spark job, а затем quality checks.
+- Проверено, что worker читает событие `file_uploaded` и запускает полный pipeline.
+- Проверено, что Spark job создает silver Parquet.
+- Проверено, что после Spark job запускаются raw и silver quality checks.
+- Проверено, что pytest-плагин формирует `report.json` для запуска worker’а.
+- Проверено, что общий запуск тестов проходит успешно командой:
+  - `pytest tests`.
+
 Я начал проект с разработки собственного pytest-плагина для ETL/data quality проверок. 
 На первом этапе добавил hook pytest_addoption, чтобы передавать параметры запуска через CLI: окружение, dataset и run_id. 
 Через pytest_configure зарегистрировал кастомные markers, а через fixture etl_context сделал общий контекст запуска, который будет использоваться в ETL-тестах.
@@ -419,3 +462,5 @@
 На девятой итерации я добавил Spark job для обработки данных. Он берет raw/orders/orders.csv из S3/MinIO, читает его через PySpark, очищает данные, фильтрует невалидные строки и записывает результат в Parquet. После этого Parquet-файлы загружаются обратно в S3 в silver/orders/. Это первый полноценный шаг обработки данных в pipeline: raw CSV → silver Parquet.
 
 На десятой итерации я добавил data quality проверки silver-слоя. Теперь pytest-плагин проверяет не только raw CSV, но и результат Spark job в silver/orders/: наличие _SUCCESS, наличие Parquet-файлов, читаемость через Spark, корректную схему и бизнес-правила качества данных. Это делает pipeline ближе к реальному ETL-процессу, где важно валидировать не только входные данные, но и результат обработки.
+
+На одиннадцатой итерации я сделал worker полноценным оркестратором pipeline. Теперь после Kafka-события file_uploaded он запускает Spark job raw → silver, а потом запускает pytest quality checks. То есть цепочка стала полной: загрузка файла → Kafka event → worker → Spark обработка → проверки качества → report.json в S3.
